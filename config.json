@@ -1,0 +1,14 @@
+{
+    "ear_threshold": 0.25,
+    "consecutive_frames": 20,
+    "use_audio_alerts": true,
+    "break_interval": 1200,
+    "break_duration": 20,
+    "use_break_reminders": true,
+    "min_face_distance": 0.5,
+    "use_distance_alerts": true,
+    "max_head_tilt": 15,
+    "use_posture_alerts": true,
+    "dark_mode": false,
+    "language": "pt-BR"
+}
