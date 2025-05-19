@@ -1,7 +1,9 @@
 import sys
 import os
 import logging
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Adiciona o diretório raiz ao sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

@@ -3,7 +3,7 @@ from reportlab.pdfgen import canvas
 import os
 from datetime import datetime
 
-def generate_pdf_report(fatigue_events, output_dir="reports"):
+def generate_pdf_report(fatigue_events, output_dir=os.path.join("..", "reports")):
     """Gera um relatório em PDF com os eventos de fadiga."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = os.path.join(output_dir, f"report_{timestamp}.pdf")
