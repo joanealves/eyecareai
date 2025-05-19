@@ -6,27 +6,24 @@ from src.video_processing import VideoProcessor
 from src.gui import EyeCareGUI
 from src.pdf_report import generate_pdf_report
 
-# Configuração do logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def main():
     logger.info("Iniciando o EyeCareAI")
 
-    # Criar pastas necessárias
     os.makedirs("reports", exist_ok=True)
     os.makedirs("assets", exist_ok=True)
     os.makedirs("data", exist_ok=True)
 
     logger.info("Pastas criadas ou verificadas")
 
-    # Iniciar interface gráfica
     root = tk.Tk()
     gui = EyeCareGUI(root)
     logger.info("Interface gráfica inicializada")
 
-    # Iniciar processador de vídeo
     video_processor = VideoProcessor(gui, config_path="config.json")
+    gui.video_processor = video_processor
     logger.info("Processador de vídeo inicializado")
 
     def on_closing():

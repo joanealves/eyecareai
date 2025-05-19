@@ -21,11 +21,9 @@ class EyeCareGUI:
         self.max_ear_points = 100  
         self.running = True
 
-        # Frames principais
         self.main_frame = tk.Frame(self.root, bg="#f0f4f8")
         self.main_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-        # Painel de métricas
         self.metrics_frame = tk.Frame(self.main_frame, bg="#ffffff", bd=2, relief="groove")
         self.metrics_frame.pack(pady=5, fill="x")
 
@@ -47,11 +45,19 @@ class EyeCareGUI:
         self.label_fps = tk.Label(self.metrics_frame, text="FPS: 0", font=("Helvetica", 12), bg="#ffffff", fg="#333333")
         self.label_fps.pack(pady=5)
 
-        # Botões
         self.button_frame = tk.Frame(self.main_frame, bg="#f0f4f8")
         self.button_frame.pack(pady=5)
 
-        self.button_report = tk.Button(self.button_frame, text="Gerar Relatório PDF", command=self.generate_report, font=("Helvetica", 10), bg="#4CAF50", fg="white", width=15)
+        self.button_report = tk.Button(
+            self.button_frame,
+            text="Gerar Relatório PDF",
+            command=self.generate_report,
+            font=("Helvetica", 10),
+            bg="#4CAF50",
+            fg="white",
+            width=18
+        )
+        self.button_report.pack(side="left", padx=5)
         self.button_report.pack(side="left", padx=5)
 
         self.button_export_csv = tk.Button(self.button_frame, text="Exportar CSV", command=self.export_csv, font=("Helvetica", 10), bg="#2196F3", fg="white", width=15)
@@ -63,16 +69,13 @@ class EyeCareGUI:
         self.button_weekly_report = tk.Button(self.button_frame, text="Relatório Semanal", command=self.generate_weekly_report, font=("Helvetica", 10), bg="#9c27b0", fg="white", width=15)
         self.button_weekly_report.pack(side="left", padx=5)
 
-        # Menu de idioma
         self.lang_var = tk.StringVar(value="pt-BR")
         lang_menu = tk.OptionMenu(self.button_frame, self.lang_var, "pt-BR", "en-US", "es-ES", command=self.change_language)
         lang_menu.pack(side="right", padx=5)
 
-        # Gráficos
         self.graph_frame = tk.Frame(self.main_frame, bg="#f0f4f8")
         self.graph_frame.pack(pady=10, fill="both", expand=True)
 
-        # Gráfico EAR
         self.fig, self.ax = plt.subplots(figsize=(6, 2))
         self.ax.set_title("EAR ao Longo do Tempo", fontsize=10)
         self.ax.set_xlabel("Tempo (s)", fontsize=8)
@@ -85,7 +88,6 @@ class EyeCareGUI:
         self.canvas_ear = FigureCanvasTkAgg(self.fig, master=self.graph_frame)
         self.canvas_ear.get_tk_widget().pack(fill="both", expand=True)
 
-        # Gráfico Piscadas por Minuto
         self.fig2, self.ax2 = plt.subplots(figsize=(6, 2))
         self.ax2.set_title("Taxa de Piscadas", fontsize=10)
         self.ax2.set_xlabel("Tempo", fontsize=8)
@@ -139,7 +141,6 @@ class EyeCareGUI:
         minutes, seconds = divmod(remainder, 60)
         self.label_session_time.config(text=f"Tempo de Sessão: {hours:02d}:{minutes:02d}:{seconds:02d}")
 
-        # Atualizar histórico para gráficos
         self.ear_history.append(ear)
         if len(self.ear_history) > self.max_ear_points:
             self.ear_history.pop(0)
@@ -163,19 +164,35 @@ class EyeCareGUI:
         self.label_status.config(text=f"Status: {status}")
 
     def generate_report(self):
-        report_path = generate_pdf_report(self.fatigue_events)
-        messagebox.showinfo("Sucesso", f"Relatório gerado: {report_path}")
+        try:
+            fatigue_events = self.video_processor.fatigue_events
+            report_path = generate_pdf_report(fatigue_events, output_dir="reports")
+            
+            if report_path and os.path.exists(report_path):
+                messagebox.showinfo("Sucesso", f"Relatório gerado:\n{report_path}")
+            else:
+                messagebox.showerror("Erro", "Falha ao gerar o relatório.")
+        except Exception as e:
+            print(f"[ERRO NA GERAÇÃO DO RELATÓRIO] {e}")
+            messagebox.showerror("Erro", "Não foi possível gerar o relatório.")
 
     def export_csv(self):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = os.path.join("..", "reports", f"fatigue_events_{timestamp}.csv")
-        df = pd.DataFrame({
-            "Evento": [f"Evento {i+1}" for i in range(len(self.fatigue_events))],
-            "Horário": [datetime.fromtimestamp(t).strftime('%d/%m/%Y %H:%M:%S') for t in self.fatigue_events]
-        })
-        df.to_csv(output_path, index=False)
-        messagebox.showinfo("Sucesso", f"CSV exportado: {output_path}")
+        try:
+            fatigue_events = self.video_processor.fatigue_events
 
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = os.path.join("reports", f"fatigue_events_{timestamp}.csv")
+
+            df = pd.DataFrame({
+                "Evento": [f"Evento {i+1}" for i in range(len(fatigue_events))],
+                "Horário": [datetime.fromtimestamp(t).strftime('%d/%m/%Y %H:%M:%S') for t in fatigue_events]
+            })
+            df.to_csv(output_path, index=False)
+            messagebox.showinfo("Sucesso", f"CSV exportado: {output_path}")
+        except Exception as e:
+            print(f"[ERRO AO EXPORTAR CSV] {e}")
+            messagebox.showerror("Erro", "Não foi possível exportar o CSV.")
+            
     def generate_weekly_report(self):
         weekly_data = self.video_processor.generate_weekly_report()
         messagebox.showinfo("Relatório Semanal", f"Total de uso: {weekly_data['formatted_usage_time']}\nFadiga: {weekly_data['fatigue_events']} eventos")

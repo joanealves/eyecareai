@@ -1,10 +1,10 @@
 {
     "days": {
         "2025-05-19": {
-            "fatigue_events": 9,
-            "total_session_time": 189.08426904678345,
-            "avg_blink_rate": 14.09791659074774,
-            "posture_warnings": 1,
+            "fatigue_events": 18,
+            "total_session_time": 424.9673812389374,
+            "avg_blink_rate": 11.500315538552238,
+            "posture_warnings": 6,
             "distance_warnings": 0,
             "break_reminders": 0
         }
