@@ -5,8 +5,7 @@ import time
 import threading
 import os
 import json
-import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 import platform
 
 class VideoProcessor:
@@ -75,6 +74,19 @@ class VideoProcessor:
         self.frame_times = []
         self.max_frame_times = 30  
         self.last_frame_time = time.time()
+        
+        self.translations = {
+            "fatigue_detected": "Fadiga Detectada!",
+            "normal_status": "Normal",
+            "paused_status": "Pausado",
+            "monitoring_status": "Monitorando",
+            "distance_warning": "AVISO: Muito perto da tela!",
+            "posture_warning": "AVISO: Corrija sua postura!",
+            "break_reminder": "HORA DA PAUSA! Olhe para longe por 20s",
+            "calibration_start": "Iniciando calibração automática...",
+            "calibration_failed": "Falha na calibração - nenhum rosto detectado.",
+            "calibration_complete": "Calibração concluída. Novo threshold EAR: {:.3f}"
+        }
         
     def load_config(self):
         """Carrega as configurações do usuário ou cria configurações padrão."""
@@ -164,28 +176,29 @@ class VideoProcessor:
             self.historical_data = {"days": {}, "weekly_summary": {}, "monthly_summary": {}}
     
     def save_historical_data(self):
+        """Salva os dados históricos do uso."""
         data_path = os.path.join("data", "user_history.json")
-    try:
-        today = datetime.now().strftime("%Y-%m-%d")
-        if today not in self.historical_data["days"]:
-            self.historical_data["days"][today] = {
-                "total_session_time": 0,
-                "fatigue_events": [],
-                "blink_rates": [],
-                "posture_warnings": 0,
-                "distance_warnings": 0,
-                "break_reminders": 0
-            }
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            if today not in self.historical_data["days"]:
+                self.historical_data["days"][today] = {
+                    "total_session_time": 0,
+                    "fatigue_events": [],
+                    "blink_rates": [],
+                    "posture_warnings": 0,
+                    "distance_warnings": 0,
+                    "break_reminders": 0
+                }
 
-        session_duration = time.time() - self.start_time
-        self.historical_data["days"][today]["total_session_time"] += session_duration
-        self.historical_data["days"][today]["fatigue_events"].extend(self.fatigue_events)
-        self.historical_data["days"][today]["blink_rates"].extend(self.blink_rate_history)
+            session_duration = time.time() - self.start_time
+            self.historical_data["days"][today]["total_session_time"] += session_duration
+            self.historical_data["days"][today]["fatigue_events"].extend(self.fatigue_events)
+            self.historical_data["days"][today]["blink_rates"].extend(self.blink_rate_history)
 
-        with open(data_path, 'w') as f:
-            json.dump(self.historical_data, f, indent=4)
-    except Exception as e:
-        print(f"[ERRO AO SALVAR DADOS HISTÓRICOS] {e}")
+            with open(data_path, 'w') as f:
+                json.dump(self.historical_data, f, indent=4)
+        except Exception as e:
+            print(f"[ERRO AO SALVAR DADOS HISTÓRICOS] {e}")
     
     def calculate_ear(self, eye_points, landmarks, frame):
         """Calcula o Eye Aspect Ratio (EAR) para um olho."""
@@ -350,7 +363,7 @@ class VideoProcessor:
                         self.fatigue_detected = True
                         self.fatigue_events.append(current_time)
                         self.session_stats["fatigue_events"] += 1
-                        self.gui.update_fatigue_status("Fadiga Detectada!")
+                        self.gui.update_fatigue_status(self.translations["fatigue_detected"])
                         if self.use_audio_alerts:
                             self.play_alert(1000, 500)
                 else:
@@ -360,7 +373,7 @@ class VideoProcessor:
                     
                     self.closed_eyes_counter = 0
                     self.fatigue_detected = False
-                    self.gui.update_fatigue_status("Normal")
+                    self.gui.update_fatigue_status(self.translations["normal_status"])
                 
                 mp.solutions.drawing_utils.draw_landmarks(
                     frame, face_landmarks, self.mp_face_mesh.FACEMESH_TESSELATION,
@@ -413,13 +426,13 @@ class VideoProcessor:
         cv2.putText(frame, f"FPS: {fps:.1f}", (10, 60), font, 0.7, (0, 255, 0), 2)
         
         if distance_warning:
-            cv2.putText(frame, "AVISO: Muito perto da tela!", (10, 90), font, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, self.translations["distance_warning"], (10, 90), font, 0.7, (0, 0, 255), 2)
         
         if posture_warning:
-            cv2.putText(frame, "AVISO: Corrija sua postura!", (10, 120), font, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, self.translations["posture_warning"], (10, 120), font, 0.7, (0, 0, 255), 2)
         
         if break_reminder:
-            cv2.putText(frame, "HORA DA PAUSA! Olhe para longe por 20s", (10, 150), font, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, self.translations["break_reminder"], (10, 150), font, 0.7, (0, 0, 255), 2)
         
         return frame
     
@@ -428,7 +441,7 @@ class VideoProcessor:
         if not self.cap.isOpened():
             return False
             
-        print("Iniciando calibração automática...")
+        print(self.translations["calibration_start"])
         ear_values = []
         
         for _ in range(frames):
@@ -452,12 +465,12 @@ class VideoProcessor:
         cv2.destroyWindow('Calibrando EyeCareAI')
         
         if not ear_values:
-            print("Falha na calibração - nenhum rosto detectado.")
+            print(self.translations["calibration_failed"])
             return False
         
         avg_ear = sum(ear_values) / len(ear_values)
         self.ear_threshold = avg_ear * 0.7
-        print(f"Calibração concluída. Novo threshold EAR: {self.ear_threshold:.3f}")
+        print(self.translations["calibration_complete"].format(self.ear_threshold))
         
         self.save_config()
         return True
@@ -511,10 +524,11 @@ class VideoProcessor:
     def toggle_pause(self):
         """Pausa ou continua o processamento."""
         self.paused = not self.paused
-        status_text = "Pausado" if self.paused else "Monitorando"
+        status_text = self.translations["paused_status"] if self.paused else self.translations["monitoring_status"]
         self.gui.update_fatigue_status(status_text)
     
     def update_settings(self, settings):
+        """Atualiza as configurações do sistema."""
         if "ear_threshold" in settings:
             self.ear_threshold = float(settings["ear_threshold"])
         if "consecutive_frames" in settings:
@@ -546,249 +560,381 @@ class VideoProcessor:
             self.gui.apply_theme(self.dark_mode)
     
         return True
-
-def get_session_report(self):
-    """Gera um relatório da sessão atual."""
-    session_duration = time.time() - self.start_time
-    hours, remainder = divmod(session_duration, 3600)
-    minutes, seconds = divmod(remainder, 60)
     
-    report = {
-        "duration": f"{int(hours)}h {int(minutes)}m {int(seconds)}s",
-        "fatigue_events": len(self.fatigue_events),
-        "blink_rate": f"{self.session_stats['blink_rate']:.1f} piscadas/min",
-        "posture_warnings": self.session_stats["posture_warnings"],
-        "distance_warnings": self.session_stats["distance_warnings"],
-        "break_reminders": self.session_stats["break_reminders"]
-    }
-    
-    recommendations = []
-    
-    if self.session_stats["blink_rate"] < 12:  
-        recommendations.append("Sua taxa de piscadas está abaixo do recomendado. Tente piscar mais conscientemente.")
-    
-    if len(self.fatigue_events) > 3:
-        recommendations.append("Muitos eventos de fadiga detectados. Considere fazer uma pausa mais longa.")
-    
-    if self.session_stats["posture_warnings"] > 5:
-        recommendations.append("Você recebeu vários avisos de postura. Considere ajustar sua estação de trabalho.")
-    
-    if self.session_stats["distance_warnings"] > 5:
-        recommendations.append("Muitos avisos de proximidade da tela. Tente manter maior distância da tela.")
-    
-    report["recommendations"] = recommendations
-    return report
-
-def generate_weekly_report(self):
-    """Gera um relatório semanal baseado nos dados históricos."""
-    today = datetime.datetime.now()
-    start_of_week = today - datetime.timedelta(days=today.weekday())
-    end_of_week = start_of_week + datetime.timedelta(days=6)
-    
-    weekly_data = {
-        "total_usage_time": 0,
-        "fatigue_events": 0,
-        "avg_blink_rate": [],
-        "posture_warnings": 0,
-        "distance_warnings": 0,
-        "break_reminders": 0,
-        "days_active": 0
-    }
-    
-    for i in range(7):
-        day = start_of_week + datetime.timedelta(days=i)
-        day_str = day.strftime("%Y-%m-%d")
+    def get_session_report(self):
+        """Gera um relatório da sessão atual."""
+        session_duration = time.time() - self.start_time
+        hours, remainder = divmod(session_duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
         
-        if day_str in self.historical_data["days"]:
-            day_data = self.historical_data["days"][day_str]
-            weekly_data["total_usage_time"] += day_data["total_session_time"]
-            weekly_data["fatigue_events"] += day_data["fatigue_events"]
-            
-            if day_data["avg_blink_rate"] > 0:
-                weekly_data["avg_blink_rate"].append(day_data["avg_blink_rate"])
-                
-            weekly_data["posture_warnings"] += day_data["posture_warnings"]
-            weekly_data["distance_warnings"] += day_data["distance_warnings"]
-            weekly_data["break_reminders"] += day_data["break_reminders"]
-            weekly_data["days_active"] += 1
-    
-    if weekly_data["avg_blink_rate"]:
-        weekly_data["avg_blink_rate"] = sum(weekly_data["avg_blink_rate"]) / len(weekly_data["avg_blink_rate"])
-    else:
-        weekly_data["avg_blink_rate"] = 0
-    
-    hours, remainder = divmod(weekly_data["total_usage_time"], 3600)
-    minutes, _ = divmod(remainder, 60)
-    weekly_data["formatted_usage_time"] = f"{int(hours)}h {int(minutes)}m"
-    
-    week_key = f"{start_of_week.strftime('%Y-%m-%d')} to {end_of_week.strftime('%Y-%m-%d')}"
-    self.historical_data["weekly_summary"][week_key] = weekly_data
-    
-    return weekly_data
-
-def analyze_usage_patterns(self):
-    """Analisa padrões de uso para gerar insights personalizados."""
-    patterns = {
-        "fatigue_peak_times": [],
-        "best_blink_rate_days": [],
-        "worst_posture_days": [],
-        "improvement_areas": []
-    }
-    
-    today = datetime.datetime.now()
-    days_to_analyze = {}
-    
-    for i in range(30):
-        day = today - datetime.timedelta(days=i)
-        day_str = day.strftime("%Y-%m-%d")
-        
-        if day_str in self.historical_data["days"]:
-            days_to_analyze[day_str] = self.historical_data["days"][day_str]
-    
-    if not days_to_analyze:
-        return patterns
-    
-    fatigue_events_by_hour = {}
-    
-    for day, data in days_to_analyze.items():
-        pass
-    
-    blink_rates = [(day, data["avg_blink_rate"]) for day, data in days_to_analyze.items() 
-                  if data["avg_blink_rate"] > 0]
-    
-    if blink_rates:
-        blink_rates.sort(key=lambda x: x[1], reverse=True)
-        patterns["best_blink_rate_days"] = blink_rates[:3] 
-    # Identificar dias com pior postura
-    posture_warnings = [(day, data["posture_warnings"]) for day, data in days_to_analyze.items()]
-    
-    if posture_warnings:
-        posture_warnings.sort(key=lambda x: x[1], reverse=True)
-        patterns["worst_posture_days"] = posture_warnings[:3]  
-    
-    avg_blink_rate = sum(data["avg_blink_rate"] for data in days_to_analyze.values() if data["avg_blink_rate"] > 0) / len([data for data in days_to_analyze.values() if data["avg_blink_rate"] > 0]) if any(data["avg_blink_rate"] > 0 for data in days_to_analyze.values()) else 0
-    
-    total_fatigue_events = sum(data["fatigue_events"] for data in days_to_analyze.values())
-    total_posture_warnings = sum(data["posture_warnings"] for data in days_to_analyze.values())
-    total_distance_warnings = sum(data["distance_warnings"] for data in days_to_analyze.values())
-    
-    if avg_blink_rate < 12:
-        patterns["improvement_areas"].append("Taxa de piscadas")
-    
-    if total_fatigue_events > 10:
-        patterns["improvement_areas"].append("Fadiga ocular")
-    
-    if total_posture_warnings > 15:
-        patterns["improvement_areas"].append("Postura")
-    
-    if total_distance_warnings > 15:
-        patterns["improvement_areas"].append("Distância da tela")
-    
-    return patterns
-
-def export_data(self, format="json"):
-    """Exporta os dados históricos para análise externa."""
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    
-    if format.lower() == "json":
-        filename = f"eyecareai_data_{today}.json"
-        try:
-            with open(filename, 'w') as f:
-                json.dump(self.historical_data, f, indent=4)
-            return filename
-        except Exception as e:
-            print(f"Erro ao exportar dados: {e}")
-            return None
-    elif format.lower() == "csv":
-        filename = f"eyecareai_data_{today}.csv"
-        try:
-            with open(filename, 'w') as f:
-                f.write("date,total_session_time,fatigue_events,avg_blink_rate,posture_warnings,distance_warnings,break_reminders\n")
-                
-                for day, data in self.historical_data["days"].items():
-                    f.write(f"{day},{data['total_session_time']},{data['fatigue_events']},{data['avg_blink_rate']},{data['posture_warnings']},{data['distance_warnings']},{data['break_reminders']}\n")
-            
-            return filename
-        except Exception as e:
-            print(f"Erro ao exportar dados: {e}")
-            return None
-    else:
-        return None
-
-def translate_ui(self, language="pt-BR"):
-    """Implementa suporte para múltiplos idiomas."""
-    translations = {
-        "en-US": {
-            "fatigue_detected": "Fatigue Detected!",
-            "normal_status": "Normal",
-            "paused_status": "Paused",
-            "monitoring_status": "Monitoring",
-            "distance_warning": "WARNING: Too close to screen!",
-            "posture_warning": "WARNING: Correct your posture!",
-            "break_reminder": "BREAK TIME! Look away for 20s",
-            "calibration_start": "Starting automatic calibration...",
-            "calibration_failed": "Calibration failed - no face detected.",
-            "calibration_complete": "Calibration complete. New EAR threshold: {:.3f}"
-        },
-        "pt-BR": {
-            "fatigue_detected": "Fadiga Detectada!",
-            "normal_status": "Normal",
-            "paused_status": "Pausado",
-            "monitoring_status": "Monitorando",
-            "distance_warning": "AVISO: Muito perto da tela!",
-            "posture_warning": "AVISO: Corrija sua postura!",
-            "break_reminder": "HORA DA PAUSA! Olhe para longe por 20s",
-            "calibration_start": "Iniciando calibração automática...",
-            "calibration_failed": "Falha na calibração - nenhum rosto detectado.",
-            "calibration_complete": "Calibração concluída. Novo threshold EAR: {:.3f}"
-        },
-        "es-ES": {
-            "fatigue_detected": "¡Fatiga Detectada!",
-            "normal_status": "Normal",
-            "paused_status": "Pausado",
-            "monitoring_status": "Monitoreando",
-            "distance_warning": "¡ADVERTENCIA: Demasiado cerca de la pantalla!",
-            "posture_warning": "¡ADVERTENCIA: Corrija su postura!",
-            "break_reminder": "¡TIEMPO DE DESCANSO! Mire lejos por 20s",
-            "calibration_start": "Iniciando calibración automática...",
-            "calibration_failed": "Falló la calibración - no se detectó ninguna cara.",
-            "calibration_complete": "Calibración completa. Nuevo umbral EAR: {:.3f}"
+        report = {
+            "duration": f"{int(hours)}h {int(minutes)}m {int(seconds)}s",
+            "fatigue_events": len(self.fatigue_events),
+            "blink_rate": f"{self.session_stats['blink_rate']:.1f} piscadas/min",
+            "posture_warnings": self.session_stats["posture_warnings"],
+            "distance_warnings": self.session_stats["distance_warnings"],
+            "break_reminders": self.session_stats["break_reminders"]
         }
-    }
-    
-    if language not in translations:
-        language = "en-US"  
-    
-    self.language = language
-    self.translations = translations[language]
-    
-    self.save_config()
-    
-    return self.translations
+        
+        recommendations = []
+        
+        if self.session_stats["blink_rate"] < 12:  
+            recommendations.append("Sua taxa de piscadas está abaixo do recomendado. Tente piscar mais conscientemente.")
+        
+        if len(self.fatigue_events) > 3:
+            recommendations.append("Muitos eventos de fadiga detectados. Considere fazer uma pausa mais longa.")
+        
+        if self.session_stats["posture_warnings"] > 5:
+            recommendations.append("Você recebeu vários avisos de postura. Considere ajustar sua estação de trabalho.")
+        
+        if self.session_stats["distance_warnings"] > 5:
+            recommendations.append("Muitos avisos de proximidade da tela. Tente manter maior distância da tela.")
+        
+        report["recommendations"] = recommendations
+        return report
 
-def optimize_performance(self):
-    """Otimiza o uso de recursos do sistema."""
-    if self.cap.isOpened():
-        current_width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        current_height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        current_fps = self.cap.get(cv2.CAP_PROP_FPS)
+    def generate_weekly_report(self):
+        """Gera um relatório semanal baseado nos dados históricos."""
+        today = datetime.now()
+        start_of_week = today - timedelta(days=today.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
         
-        avg_fps = len(self.frame_times) / sum(self.frame_times) if self.frame_times else 0
+        weekly_data = {
+            "total_usage_time": 0,
+            "fatigue_events": 0,
+            "avg_blink_rate": [],
+            "posture_warnings": 0,
+            "distance_warnings": 0,
+            "break_reminders": 0,
+            "days_active": 0
+        }
         
-        if avg_fps < 15:  
-            new_width = min(current_width, 480)
-            new_height = min(current_height, 360)
+        for i in range(7):
+            day = start_of_week + timedelta(days=i)
+            day_str = day.strftime("%Y-%m-%d")
             
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, new_width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, new_height)
-            
-            self.face_mesh = self.mp_face_mesh.FaceMesh(
-                max_num_faces=1,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5,
-                refine_landmarks=False  
-            )
-            
-            return True
+            if day_str in self.historical_data["days"]:
+                day_data = self.historical_data["days"][day_str]
+                weekly_data["total_usage_time"] += day_data.get("total_session_time", 0)
+                weekly_data["fatigue_events"] += len(day_data.get("fatigue_events", []))
+                
+                avg_blink_rate = sum(day_data.get("blink_rates", [])) / len(day_data.get("blink_rates", [1])) if day_data.get("blink_rates", []) else 0
+                if avg_blink_rate > 0:
+                    weekly_data["avg_blink_rate"].append(avg_blink_rate)
+                    
+                weekly_data["posture_warnings"] += day_data.get("posture_warnings", 0)
+                weekly_data["distance_warnings"] += day_data.get("distance_warnings", 0)
+                weekly_data["break_reminders"] += day_data.get("break_reminders", 0)
+                weekly_data["days_active"] += 1
         
-        return False
+        if weekly_data["avg_blink_rate"]:
+            weekly_data["avg_blink_rate"] = sum(weekly_data["avg_blink_rate"]) / len(weekly_data["avg_blink_rate"])
+        else:
+            weekly_data["avg_blink_rate"] = 0
+        
+        hours, remainder = divmod(weekly_data["total_usage_time"], 3600)
+        minutes, _ = divmod(remainder, 60)
+        weekly_data["formatted_usage_time"] = f"{int(hours)}h {int(minutes)}m"
+        
+        week_key = f"{start_of_week.strftime('%Y-%m-%d')} to {end_of_week.strftime('%Y-%m-%d')}"
+        self.historical_data["weekly_summary"][week_key] = weekly_data
+        
+        return weekly_data
+
+    def analyze_usage_patterns(self):
+        """Analisa padrões de uso para gerar insights personalizados."""
+        patterns = {
+            "fatigue_peak_times": [],
+            "best_blink_rate_days": [],
+            "worst_posture_days": [],
+            "improvement_areas": []
+        }
+        
+        today = datetime.now()
+        days_to_analyze = {}
+        
+        for i in range(30):
+            day = today - timedelta(days=i)
+            day_str = day.strftime("%Y-%m-%d")
+            
+            if day_str in self.historical_data["days"]:
+                days_to_analyze[day_str] = self.historical_data["days"][day_str]
+        
+        if len(days_to_analyze) < 3:
+            patterns["improvement_areas"].append("Dados insuficientes para análise completa. Continue usando o aplicativo para insights mais precisos.")
+            return patterns
+        
+        fatigue_day_counts = {}
+        for day_str, day_data in days_to_analyze.items():
+            fatigue_events = day_data.get("fatigue_events", [])
+            fatigue_count = len(fatigue_events)
+            
+            if fatigue_count > 0:
+                fatigue_day_counts[day_str] = fatigue_count
+                
+                hour_counts = {}
+                for timestamp in fatigue_events:
+                    event_time = datetime.fromtimestamp(timestamp)
+                    hour = event_time.hour
+                    hour_counts[hour] = hour_counts.get(hour, 0) + 1
+                
+                if hour_counts:
+                    peak_hour = max(hour_counts, key=hour_counts.get)
+                    day_date = datetime.strptime(day_str, "%Y-%m-%d").strftime("%d/%m")
+                    patterns["fatigue_peak_times"].append(f"{day_date}: {peak_hour}:00 - {peak_hour+1}:00")
+        
+        blink_rates = {}
+        for day_str, day_data in days_to_analyze.items():
+            rates = day_data.get("blink_rates", [])
+            if rates:
+                avg_rate = sum(rates) / len(rates)
+                blink_rates[day_str] = avg_rate
+        
+        if blink_rates:
+            sorted_blink_days = sorted(blink_rates.items(), key=lambda x: x[1], reverse=True)
+            for day_str, rate in sorted_blink_days[:3]:
+                day_date = datetime.strptime(day_str, "%Y-%m-%d").strftime("%d/%m")
+                patterns["best_blink_rate_days"].append(f"{day_date}: {rate:.1f} piscadas/min")
+            
+            avg_global_blink = sum(blink_rates.values()) / len(blink_rates)
+            if avg_global_blink < 15:
+                patterns["improvement_areas"].append(f"Sua taxa média de piscadas ({avg_global_blink:.1f}/min) está abaixo do ideal (15-20/min). Tente fazer exercícios para os olhos regularmente.")
+        
+        posture_warnings = {}
+        for day_str, day_data in days_to_analyze.items():
+            warnings = day_data.get("posture_warnings", 0)
+            if warnings > 0:
+                posture_warnings[day_str] = warnings
+        
+        if posture_warnings:
+            sorted_posture_days = sorted(posture_warnings.items(), key=lambda x: x[1], reverse=True)
+            for day_str, count in sorted_posture_days[:3]:
+                day_date = datetime.strptime(day_str, "%Y-%m-%d").strftime("%d/%m")
+                patterns["worst_posture_days"].append(f"{day_date}: {count} avisos")
+            
+            if len(sorted_posture_days) >= 7:
+                recent_days = sorted([datetime.strptime(d, "%Y-%m-%d") for d in posture_warnings.keys()])[-7:]
+                recent_days_str = [d.strftime("%Y-%m-%d") for d in recent_days]
+                recent_warnings = [posture_warnings[d] for d in recent_days_str if d in posture_warnings]
+                
+                if recent_warnings and sum(recent_warnings) / len(recent_warnings) > 5:
+                    patterns["improvement_areas"].append("Você recebeu muitos avisos de postura na última semana. Considere ergonomia e ajuste sua cadeira/mesa.")
+        
+        usage_times = {}
+        for day_str, day_data in days_to_analyze.items():
+            usage_time = day_data.get("total_session_time", 0)
+            usage_times[day_str] = usage_time
+        
+        if usage_times:
+            avg_daily_usage = sum(usage_times.values()) / len(usage_times)
+            hours, remainder = divmod(avg_daily_usage, 3600)
+            minutes, _ = divmod(remainder, 60)
+            
+            if hours >= 4:
+                patterns["improvement_areas"].append(f"Seu tempo médio de uso diário é de {int(hours)}h {int(minutes)}m. Considere fazer pausas mais frequentes e limitar o tempo de tela.")
+        
+        if not patterns["improvement_areas"]:
+            patterns["improvement_areas"].append("Seus padrões de uso parecem adequados. Continue mantendo bons hábitos!")
+        
+        return patterns
+
+    def translate_ui(self, language_code):
+        """Traduz a interface do usuário para o idioma especificado."""
+        translations = {
+            "pt-BR": {
+                "fatigue_detected": "Fadiga Detectada!",
+                "normal_status": "Normal",
+                "paused_status": "Pausado",
+                "monitoring_status": "Monitorando",
+                "distance_warning": "AVISO: Muito perto da tela!",
+                "posture_warning": "AVISO: Corrija sua postura!",
+                "break_reminder": "HORA DA PAUSA! Olhe para longe por 20s",
+                "calibration_start": "Iniciando calibração automática...",
+                "calibration_failed": "Falha na calibração - nenhum rosto detectado.",
+                "calibration_complete": "Calibração concluída. Novo threshold EAR: {:.3f}"
+            },
+            "en-US": {
+                "fatigue_detected": "Fatigue Detected!",
+                "normal_status": "Normal",
+                "paused_status": "Paused",
+                "monitoring_status": "Monitoring",
+                "distance_warning": "WARNING: Too close to screen!",
+                "posture_warning": "WARNING: Fix your posture!",
+                "break_reminder": "BREAK TIME! Look far away for 20s",
+                "calibration_start": "Starting automatic calibration...",
+                "calibration_failed": "Calibration failed - no face detected.",
+                "calibration_complete": "Calibration complete. New EAR threshold: {:.3f}"
+            }
+        }
+        
+        if language_code not in translations:
+            language_code = "en-US"
+            
+        self.translations = translations[language_code]
+        
+        if hasattr(self.gui, "update_translations"):
+            self.gui.update_translations(self.translations)
+            
+        return True
+    
+    def generate_monthly_report(self):
+        """Gera um relatório mensal baseado nos dados históricos."""
+        today = datetime.now()
+        current_month = today.month
+        current_year = today.year
+        
+        start_of_month = datetime(current_year, current_month, 1)
+        if current_month == 12:
+            end_of_month = datetime(current_year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_of_month = datetime(current_year, current_month + 1, 1) - timedelta(days=1)
+        
+        monthly_data = {
+            "total_usage_time": 0,
+            "fatigue_events": 0,
+            "avg_blink_rate": [],
+            "posture_warnings": 0,
+            "distance_warnings": 0,
+            "break_reminders": 0,
+            "days_active": 0
+        }
+        
+        current_day = start_of_month
+        while current_day <= end_of_month and current_day <= today:
+            day_str = current_day.strftime("%Y-%m-%d")
+            
+            if day_str in self.historical_data["days"]:
+                day_data = self.historical_data["days"][day_str]
+                monthly_data["total_usage_time"] += day_data.get("total_session_time", 0)
+                monthly_data["fatigue_events"] += len(day_data.get("fatigue_events", []))
+                
+                avg_blink_rate = sum(day_data.get("blink_rates", [])) / len(day_data.get("blink_rates", [1])) if day_data.get("blink_rates", []) else 0
+                if avg_blink_rate > 0:
+                    monthly_data["avg_blink_rate"].append(avg_blink_rate)
+                    
+                monthly_data["posture_warnings"] += day_data.get("posture_warnings", 0)
+                monthly_data["distance_warnings"] += day_data.get("distance_warnings", 0)
+                monthly_data["break_reminders"] += day_data.get("break_reminders", 0)
+                monthly_data["days_active"] += 1
+            
+            current_day += timedelta(days=1)
+        
+        if monthly_data["avg_blink_rate"]:
+            monthly_data["avg_blink_rate"] = sum(monthly_data["avg_blink_rate"]) / len(monthly_data["avg_blink_rate"])
+        else:
+            monthly_data["avg_blink_rate"] = 0
+        
+        hours, remainder = divmod(monthly_data["total_usage_time"], 3600)
+        minutes, _ = divmod(remainder, 60)
+        monthly_data["formatted_usage_time"] = f"{int(hours)}h {int(minutes)}m"
+        
+        month_key = f"{current_year}-{current_month:02d}"
+        self.historical_data["monthly_summary"][month_key] = monthly_data
+        
+        self.save_historical_data()
+        
+        return monthly_data
+    
+    def export_data(self, export_path=None):
+        """Exporta os dados históricos para um arquivo JSON."""
+        if export_path is None:
+            export_path = os.path.join("data", "export_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json")
+        
+        try:
+            export_data = {
+                "user_data": self.historical_data,
+                "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "software_version": "1.0.0",
+                "settings": {
+                    "ear_threshold": self.ear_threshold,
+                    "consecutive_frames": self.consecutive_frames,
+                    "break_interval": self.break_interval,
+                    "min_face_distance": self.min_face_distance,
+                    "max_head_tilt": self.max_head_tilt
+                }
+            }
+            
+            with open(export_path, 'w') as f:
+                json.dump(export_data, f, indent=4)
+                
+            return True, export_path
+        except Exception as e:
+            print(f"Erro ao exportar dados: {e}")
+            return False, str(e)
+    
+    def import_data(self, import_path):
+        """Importa dados históricos de um arquivo JSON."""
+        try:
+            with open(import_path, 'r') as f:
+                import_data = json.load(f)
+            
+            if "user_data" in import_data:
+                for day, day_data in import_data["user_data"].get("days", {}).items():
+                    if day not in self.historical_data["days"]:
+                        self.historical_data["days"][day] = day_data
+                    else:
+                        self.historical_data["days"][day]["total_session_time"] += day_data.get("total_session_time", 0)
+                        self.historical_data["days"][day]["fatigue_events"].extend(day_data.get("fatigue_events", []))
+                        self.historical_data["days"][day]["blink_rates"].extend(day_data.get("blink_rates", []))
+                        self.historical_data["days"][day]["posture_warnings"] += day_data.get("posture_warnings", 0)
+                        self.historical_data["days"][day]["distance_warnings"] += day_data.get("distance_warnings", 0)
+                        self.historical_data["days"][day]["break_reminders"] += day_data.get("break_reminders", 0)
+                
+                for week, week_data in import_data["user_data"].get("weekly_summary", {}).items():
+                    if week not in self.historical_data["weekly_summary"]:
+                        self.historical_data["weekly_summary"][week] = week_data
+                
+                for month, month_data in import_data["user_data"].get("monthly_summary", {}).items():
+                    if month not in self.historical_data["monthly_summary"]:
+                        self.historical_data["monthly_summary"][month] = month_data
+                
+                self.save_historical_data()
+                return True, "Dados importados com sucesso"
+            else:
+                return False, "Formato de arquivo inválido"
+        except Exception as e:
+            print(f"Erro ao importar dados: {e}")
+            return False, str(e)
+
+    def get_recommendations(self):
+        """Gera recomendações personalizadas com base nos dados históricos."""
+        recommendations = []
+        
+        if not self.historical_data["days"]:
+            recommendations.append("Continue usando o aplicativo para receber recomendações personalizadas.")
+            return recommendations
+        
+        blink_rates = []
+        for day_data in self.historical_data["days"].values():
+            blink_rates.extend(day_data.get("blink_rates", []))
+        
+        if blink_rates:
+            avg_blink_rate = sum(blink_rates) / len(blink_rates)
+            if avg_blink_rate < 12:
+                recommendations.append("Sua taxa média de piscadas está abaixo do recomendado. Pratique a regra 20-20-20: a cada 20 minutos, olhe para algo a 20 pés (6 metros) de distância por 20 segundos.")
+        
+        fatigue_count = sum(len(day_data.get("fatigue_events", [])) for day_data in self.historical_data["days"].values())
+        total_usage_time = sum(day_data.get("total_session_time", 0) for day_data in self.historical_data["days"].values())
+        
+        if total_usage_time > 0:
+            if fatigue_rate > 2:
+                recommendations.append("Você apresenta sinais frequentes de fadiga ocular. Considere aumentar o brilho do ambiente e reduzir o brilho da tela.")
+        
+        posture_warnings = sum(day_data.get("posture_warnings", 0) for day_data in self.historical_data["days"].values())
+        if posture_warnings > 20:
+            recommendations.append("Você recebe muitos avisos de postura. Considere ajustar a altura da cadeira/mesa e manter uma postura ergonômica.")
+        
+        distance_warnings = sum(day_data.get("distance_warnings", 0) for day_data in self.historical_data["days"].values())
+        if distance_warnings > 20:
+            recommendations.append("Você tende a se aproximar muito da tela. Tente manter uma distância de pelo menos 50-70cm do monitor.")
+        
+        days_count = len(self.historical_data["days"])
+        if days_count > 0:
+            avg_daily_time = total_usage_time / days_count
+            if avg_daily_time > 5 * 3600:  
+                recommendations.append("Seu tempo médio diário de uso de tela é elevado. Tente fazer pausas mais frequentes e alternar entre tarefas digitais e não-digitais.")
+        
+        if not recommendations:
+            recommendations.append("Seus hábitos de uso de tela parecem adequados. Continue mantendo bons hábitos para a saúde ocular!")
+        
+        return recommendations

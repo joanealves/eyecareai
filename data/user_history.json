@@ -7,6 +7,18 @@
             "posture_warnings": 6,
             "distance_warnings": 0,
             "break_reminders": 0
+        },
+        "2025-05-20": {
+            "total_session_time": 53.28624629974365,
+            "fatigue_events": [
+                1747747078.4309864,
+                1747747098.9520168,
+                1747747114.4021251
+            ],
+            "blink_rates": [],
+            "posture_warnings": 0,
+            "distance_warnings": 0,
+            "break_reminders": 0
         }
     },
     "weekly_summary": {},
