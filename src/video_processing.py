@@ -7,6 +7,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import platform
+from src.pdf_report import generate_enhanced_pdf_report
 
 class VideoProcessor:
     def __init__(self, gui, config_path="config.json"):
@@ -938,3 +939,5 @@ class VideoProcessor:
             recommendations.append("Seus hábitos de uso de tela parecem adequados. Continue mantendo bons hábitos para a saúde ocular!")
         
         return recommendations
+    
+    
